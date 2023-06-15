@@ -1,0 +1,264 @@
+esphome:
+  name: acqi-sleep
+  project:
+    name: "spezifisch.acqi-clock"
+    version: "1.0.0"
+
+esp32:
+  board: esp32dev
+
+logger:
+
+globals:
+  - id: setting_mode
+    type: std::string
+    restore_value: no  # Strings cannot be saved/restored
+    initial_value: '"clock"'
+
+light:
+  - platform: status_led
+    id: bolt_led
+    name: "Bolt LED"
+    pin: GPIO22
+
+i2c:
+  - id: bus_rtc
+    sda: GPIO26
+    scl: GPIO27
+    scan: false
+    frequency: 100000
+  - id: bus_sensor
+    sda: GPIO32
+    scl: GPIO33
+    scan: false
+    frequency: 100000
+
+time:
+  - platform: ds1307
+    id: rtc_time
+    i2c_id: bus_rtc
+
+sensor:
+  - platform: aht10
+    i2c_id: bus_sensor
+    temperature:
+      name: "Temperature"
+      id: aht_temp
+    humidity:
+      name: "Humidity"
+      id: aht_hum
+    update_interval: 30s
+  - platform: uptime
+    id: uptime_sensor
+    name: "Uptime Sensor"
+
+output:
+  - platform: ledc
+    pin: GPIO21
+    id: rtttl_out
+
+rtttl:
+  output: rtttl_out
+  id: ringtone
+
+display:
+  - platform: tm1640
+    id: clock_display
+    dio_pin: GPIO18
+    clk_pin: GPIO19
+    # only 0-3 are visually different
+    intensity: 3
+    # always 11 for gtclock
+    length: 11
+    update_interval: 0.5s
+    lambda: |-
+      static int init = 0;
+      const auto mode = id(setting_mode);
+      static auto previousMode = mode;
+
+      if (init < 4) {
+        if (init == 0) {
+          id(ringtone).play("two_short:d=4,o=5,b=100:16c6,16e6,16g7");
+        }
+
+        it.print(" Pb  100");
+        it.flags.date_dash = true;
+        it.set_intensity(init);
+        init++;
+
+        id(bolt_led).toggle().perform();
+      } else if (init < 5) {
+        it.print(" ");
+        it.clear_flags();
+        init++;
+      } else if (mode == "clock") {
+        it.printf("%2d%02d%2d%2d%3.0fC", id(rtc_time).utcnow().hour, id(rtc_time).utcnow().minute,
+                  id(rtc_time).utcnow().month, id(rtc_time).utcnow().day_of_month, id(aht_temp).state);
+        it.clear_flags();
+        it.flags.month = true;
+        it.flags.day = true;
+        it.flags.date_dash = true;
+        it.flags.degree = true;
+
+        static bool show_colon = true;
+        it.flags.colon = show_colon;
+        show_colon = !show_colon;
+      } else if (mode == "hydro") {
+        it.printf("%2d%02d  %2.0f%3.0fC", id(rtc_time).utcnow().hour, id(rtc_time).utcnow().minute,
+                  id(aht_hum).state, id(aht_temp).state);
+        it.clear_flags();
+        it.flags.degree = true;
+
+        static bool show_colon = true;
+        it.flags.colon = show_colon;
+        show_colon = !show_colon;
+      } else if (mode == "onlyclock") {
+        it.printf("%2d%02d        ", id(rtc_time).utcnow().hour, id(rtc_time).utcnow().minute);
+        it.clear_flags();
+      } else if (mode == "test") {
+        static int cnt = 0;
+        if (mode != previousMode) {
+          cnt = 0;
+        }
+
+        switch (cnt++) {
+          case 0:
+            it.print("~~~~~~~~~~~");
+            it.clear_flags();
+            id(bolt_led).turn_off().perform();
+            break;
+          case 1:
+            it.print("           ");
+            it.flags.pm = true;
+            break;
+          case 2:
+            it.flags.alarm1 = true;
+            break;
+          case 3:
+            it.flags.alarm2 = true;
+            break;
+          case 4:
+            it.flags.colon_hi = true;
+            break;
+          case 5:
+            it.flags.colon_lo = true;
+            break;
+          case 6:
+            it.flags.snooze = true;
+            break;
+          case 7:
+            it.flags.month10_hi = true;
+            break;
+          case 8:
+            it.flags.month10_lo = true;
+            break;
+          case 9:
+            it.flags.month = true;
+            break;
+          case 10:
+            it.flags.day = true;
+            break;
+          case 11:
+            it.flags.date_dash = true;
+            break;
+          case 12:
+            it.flags.degree = true;
+            break;
+          case 13:
+            id(bolt_led).turn_on().perform();
+            break;
+          default:
+            if (cnt > 13+11) {
+              cnt = 0;
+            } else {
+              it.clear_flags();
+              id(bolt_led).turn_off().perform();
+              if (cnt == 17) {
+                it.print(cnt - 13, " ~");
+              } else {
+                it.print(cnt - 13, "~");
+              }
+            }
+        }
+      }
+
+      previousMode = mode;
+
+matrix_keypad:
+  id: buttons
+  rows:
+    - pin: GPIO4
+    - pin: GPIO2
+  columns:
+    - pin: GPIO5
+    - pin: GPIO17
+    - pin: GPIO16
+  # physical order: snooze mode up down alarm light
+  # button matrix order: up down light snooze mode alarm
+  keys: "UDLSMA"
+
+binary_sensor:
+  - platform: matrix_keypad
+    keypad_id: buttons
+    id: keySnooze
+    key: S
+    filters:
+      - delayed_on: 0.1s
+    on_press:
+      rtttl.stop:
+  - platform: matrix_keypad
+    id: keyMode
+    key: M
+    filters:
+      - delayed_on: 0.1s
+    on_press:
+      lambda: |-
+        const auto mode = id(setting_mode);
+        if (mode == "clock") {
+          id(setting_mode) = "hydro";
+        } else if (mode == "hydro") {
+          id(setting_mode) = "onlyclock";
+        } else if (mode == "onlyclock") {
+          id(setting_mode) = "test";
+        } else {
+          id(setting_mode) = "clock";
+        }
+  - platform: matrix_keypad
+    id: keyUp
+    key: U
+    filters:
+      - delayed_on: 0.1s
+    on_press:
+      logger.log: "button: up"
+  - platform: matrix_keypad
+    id: keyDown
+    key: D
+    filters:
+      - delayed_on: 0.1s
+    on_press:
+      logger.log: "button: down"
+  - platform: matrix_keypad
+    id: keyAlarm
+    key: A
+    filters:
+      - delayed_on: 0.1s
+    on_press:
+      rtttl.play: "mario:d=4,o=5,b=100:16e6,16e6,32p,8e6,16c6,8e6,8g6,8p,8g,8p,8c6,16p,8g,16p,8e,16p,8a,8b,16a#,8a,16g.,16e6,16g6,8a6,16f6,8g6,8e6,16c6,16d6,8b,16p,8c6,16p,8g,16p,8e,16p,8a,8b,16a#,8a,16g.,16e6,16g6,8a6,16f6,8g6,8e6,16c6,16d6,8b,8p,16g6,16f#6,16f6,16d#6,16p,16e6,16p,16g#,16a,16c6,16p,16a,16c6,16d6,8p,16g6,16f#6,16f6,16d#6,16p,16e6,16p,16c7,16p,16c7,16c7,p,16g6,16f#6,16f6,16d#6,16p,16e6,16p,16g#,16a,16c6,16p,16a,16c6,16d6,8p,16d#6,8p,16d6,8p,16c6"
+  - platform: matrix_keypad
+    id: keyLight
+    key: L
+    filters:
+      - delayed_on: 0.1s
+    on_press:
+      lambda: |-
+        // cycle through display brightness
+        ESP_LOGD("buttons", "button: light");
+        static uint8_t intensity = 3;
+        intensity = (intensity + 1) % 4;
+        id(clock_display).set_intensity(intensity);
+
+external_components:
+  - source:
+      type: local
+      path: components
+    components: [tm1640]
