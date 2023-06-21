@@ -103,7 +103,7 @@ display:
         static bool show_colon = true;
         it.flags.colon = show_colon;
         show_colon = !show_colon;
-      } else if (mode == "hydro") {
+      } else if (mode == "hum") {
         it.printf("%2d%02d  %2.0f%3.0fC", id(rtc_time).utcnow().hour, id(rtc_time).utcnow().minute,
                   id(aht_hum).state, id(aht_temp).state);
         it.clear_flags();
@@ -112,9 +112,14 @@ display:
         static bool show_colon = true;
         it.flags.colon = show_colon;
         show_colon = !show_colon;
-      } else if (mode == "onlyclock") {
+      } else if (mode == "nightclock") {
         it.printf("%2d%02d        ", id(rtc_time).utcnow().hour, id(rtc_time).utcnow().minute);
         it.clear_flags();
+      } else if (mode == "nighthum") {
+        it.printf("%2d%02d  %2.0f%3.0fC", id(rtc_time).utcnow().hour, id(rtc_time).utcnow().minute,
+                  id(aht_hum).state, id(aht_temp).state);
+        it.clear_flags();
+        it.flags.degree = true;
       } else if (mode == "test") {
         static int cnt = 0;
         if (mode != previousMode) {
@@ -215,10 +220,12 @@ binary_sensor:
       lambda: |-
         const auto mode = id(setting_mode);
         if (mode == "clock") {
-          id(setting_mode) = "hydro";
-        } else if (mode == "hydro") {
-          id(setting_mode) = "onlyclock";
-        } else if (mode == "onlyclock") {
+          id(setting_mode) = "hum";
+        } else if (mode == "hum") {
+          id(setting_mode) = "nighthum";
+        } else if (mode == "nighthum") {
+          id(setting_mode) = "nightclock";
+        } else if (mode == "nightclock") {
           id(setting_mode) = "test";
         } else {
           id(setting_mode) = "clock";
