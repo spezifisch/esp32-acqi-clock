@@ -1,8 +1,12 @@
 esphome:
-  name: acqi-sleep
+  name: acqi-bench
   project:
     name: "spezifisch.acqi-clock"
     version: "1.0.0"
+  on_boot:
+    priority: 100
+    then:
+      - wifi.disable:
 
 esp32:
   board: esp32dev
@@ -14,12 +18,25 @@ globals:
     type: std::string
     restore_value: no  # Strings cannot be saved/restored
     initial_value: '"clock"'
+  - id: notification
+    type: std::string
+    restore_value: no
+    initial_value: '""'
 
 light:
   - platform: status_led
     id: bolt_led
     name: "Bolt LED"
     pin: GPIO22
+
+wifi:
+  enable_on_boot: false
+  reboot_timeout: 0s
+
+improv_serial:
+
+esp32_improv:
+  authorizer: keySnooze
 
 i2c:
   - id: bus_rtc
@@ -37,6 +54,21 @@ time:
   - platform: ds1307
     id: rtc_time
     i2c_id: bus_rtc
+    timezone: Europe/Berlin
+  - platform: sntp
+    id: sntp_time
+    timezone: Europe/Berlin
+    on_time_sync:
+      if:
+        condition:
+          and:
+            - wifi.enabled:
+            - time.has_time:
+                id: sntp_time
+        then:
+          - lambda: id(notification) = " ntp";
+          - ds1307.write_time:
+              id: rtc_time
 
 sensor:
   - platform: aht10
@@ -73,12 +105,19 @@ display:
     update_interval: 0.5s
     lambda: |-
       static int init = 0;
+      static int notif_count = -1;
       const auto mode = id(setting_mode);
       static auto previousMode = mode;
 
+      if (notif_count == -1 && id(notification) != "") {
+        // new notification, set duration in display update cycles
+        notif_count = 3;
+      }
+
       if (init < 4) {
         if (init == 0) {
-          id(ringtone).play("two_short:d=4,o=5,b=100:16c6,16e6,16g7");
+          id(ringtone).play("c:d=4,o=5,b=100:16c6,16e6,16g7");
+          //id(ringtone).play("short:d=4,o=5,b=200:16a6");
         }
 
         it.print(" Pb  100");
@@ -91,6 +130,10 @@ display:
         it.print(" ");
         it.clear_flags();
         init++;
+      } else if (notif_count >= 0) {
+        notif_count--;
+        it.print(id(notification).c_str());
+        it.clear_flags();
       } else if (mode == "clock") {
         it.printf("%2d%02d%2d%2d%3.0fC", id(rtc_time).utcnow().hour, id(rtc_time).utcnow().minute,
                   id(rtc_time).utcnow().month, id(rtc_time).utcnow().day_of_month, id(aht_temp).state);
@@ -187,6 +230,11 @@ display:
         }
       }
 
+      // clear notification
+      if (notif_count == -1 && id(notification) != "") {
+        id(notification) = "";
+      }
+
       previousMode = mode;
 
 matrix_keypad:
@@ -210,7 +258,22 @@ binary_sensor:
     filters:
       - delayed_on: 0.1s
     on_press:
-      rtttl.stop:
+      if:
+        condition:
+          rtttl.is_playing:
+        then:
+          - logger.log: "snooze stops playback"
+          - rtttl.stop:
+        else:
+          if:
+            condition:
+              wifi.enabled:
+            then:
+              - lambda: id(notification) = "cOFF";
+              - wifi.disable:
+            else:
+              - lambda: id(notification) = "cOn";
+              - wifi.enable:
   - platform: matrix_keypad
     id: keyMode
     key: M
