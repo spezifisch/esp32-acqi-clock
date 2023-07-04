@@ -52,15 +52,15 @@ namespace esphome
                 bool pm;
                 bool alarm1;
                 bool alarm2;
-                bool colon_hi; // upper dot of : (between hours and minutes)
-                bool colon_lo; // lower dot
-                bool colon; // both dots of : (_hi/_lo and this one are or'ed)
-                bool snooze; // zZ
+                bool colon_hi;   // upper dot of : (between hours and minutes)
+                bool colon_lo;   // lower dot
+                bool colon;      // both dots of : (_hi/_lo and this one are or'ed)
+                bool snooze;     // zZ
                 bool month10_hi; // upper part of the 1 in the 10th place of month number
                 bool month10_lo; // lower part of the 1
-                bool month; // M
-                bool day; // D
-                bool date_dash; // between month and day
+                bool month;      // M
+                bool day;        // D
+                bool date_dash;  // between month and day
                 bool degree;
             };
             Flags flags;

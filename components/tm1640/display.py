@@ -17,19 +17,22 @@ tm1640_ns = cg.esphome_ns.namespace("tm1640")
 TM1640Display = tm1640_ns.class_("TM1640Display", cg.PollingComponent)
 TM1640DisplayRef = TM1640Display.operator("ref")
 
-CONFIG_SCHEMA = disp.BASIC_DISPLAY_SCHEMA.extend(
-    {
-        cv.GenerateID(): cv.declare_id(TM1640Display),
-        cv.Optional(CONF_INTENSITY, default=7): cv.All(
-            cv.uint8_t, cv.Range(min=0, max=7)
-        ),
-        cv.Optional(CONF_LENGTH, default=16): cv.All(
-            cv.uint8_t, cv.Range(min=1, max=16)
-        ),
-        cv.Required(CONF_CLK_PIN): pins.gpio_output_pin_schema,
-        cv.Required(CONF_DIO_PIN): pins.gpio_output_pin_schema,
-    }
-).extend(cv.polling_component_schema("10s"))
+CONFIG_SCHEMA = (
+    disp.BASIC_DISPLAY_SCHEMA.extend(
+        {
+            cv.GenerateID(): cv.declare_id(TM1640Display),
+            cv.Optional(CONF_INTENSITY, default=7): cv.All(
+                cv.uint8_t, cv.Range(min=0, max=7)
+            ),
+            cv.Optional(CONF_LENGTH, default=16): cv.All(
+                cv.uint8_t, cv.Range(min=1, max=16)
+            ),
+            cv.Optional(CONF_CLK_PIN, default=0): pins.gpio_output_pin_schema,
+            cv.Optional(CONF_DIO_PIN, default=0): pins.gpio_output_pin_schema,
+        }
+    )
+    .extend(cv.polling_component_schema("10s"))
+)
 
 
 async def to_code(config):

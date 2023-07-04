@@ -263,6 +263,32 @@ namespace esphome
             bit_delay_();
         }
 
+        void TM1640Display::send_byte_(uint8_t b)
+        {
+            uint8_t data = b;
+            for (uint8_t i = 0; i < 8; i++)
+            {
+                this->clk_pin_->digital_write(LOW);
+                this->bit_delay_();
+
+                // Set data bit while CLK is low
+                this->dio_pin_->digital_write(data & 0x01 ? HIGH : LOW);
+                this->bit_delay_();
+
+                // then do a CLK low-high to send databit
+                this->clk_pin_->digital_write(HIGH);
+                this->bit_delay_();
+
+                // CLK high
+                this->clk_pin_->digital_write(LOW);
+                this->bit_delay_();
+
+                data = data >> 1;
+            }
+
+            this->bit_delay_();
+        }
+
         void TM1640Display::clear_flags()
         {
             flags.pm = false;
@@ -306,32 +332,6 @@ namespace esphome
             this->stop_();
         }
 
-        void TM1640Display::send_byte_(uint8_t b)
-        {
-            uint8_t data = b;
-            for (uint8_t i = 0; i < 8; i++)
-            {
-                this->clk_pin_->digital_write(LOW);
-                this->bit_delay_();
-
-                // Set data bit while CLK is low
-                this->dio_pin_->digital_write(data & 0x01 ? HIGH : LOW);
-                this->bit_delay_();
-
-                // then do a CLK low-high to send databit
-                this->clk_pin_->digital_write(HIGH);
-                this->bit_delay_();
-
-                // CLK high
-                this->clk_pin_->digital_write(LOW);
-                this->bit_delay_();
-
-                data = data >> 1;
-            }
-
-            this->bit_delay_();
-        }
-
         uint8_t TM1640Display::print(uint8_t start_pos, const char *str)
         {
             ESP_LOGV(TAG, "Print at %d: %s", start_pos, str);
@@ -349,17 +349,22 @@ namespace esphome
                 {
                     ESP_LOGE(TAG, "String is too long for the display!");
                     break;
-                } else if (pos >= 11) {
+                }
+                else if (pos >= 11)
+                {
                     ESP_LOGW(TAG, "String is longer than used by the display!");
                 }
-                
+
                 // special handling for 10th place of months:
                 // it's not a segment but encoded in dots
-                if (pos == 4 && !parsed_month10) {
+                if (pos == 4 && !parsed_month10)
+                {
                     parsed_month10 = true;
                     flags.month10_hi = data & SEGMENT_B;
                     flags.month10_lo = data & SEGMENT_C;
-                } else {
+                }
+                else
+                {
                     // apply display mask
                     if (pos < TM1640_DISPLAY_MASK_SIZE)
                     {
